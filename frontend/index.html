@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Algorithm Visualizer</title>
+  </head>
+  <body>
+    <nav class="topbar">
+      <div class="topbar-inner">
+        <div class="tabs">
+          <a href="#/" data-route="main">Trees</a>
+          <a href="#/graphs" data-route="graphs">Graphs</a>
+          <a href="#/practice" data-route="practice">Practice</a>
+          <a href="#/history" data-route="history">History</a>
+        </div>
+        <div id="account" class="account">
+          <!-- filled by auth.ts -->
+        </div>
+      </div>
+    </nav>
+
+    <main class="page">
+      <!-- ===================== Trees ===================== -->
+      <section id="view-main" class="view">
+        <header class="hero">
+          <h1 id="tree-heading">Binary Search Tree</h1>
+          <p id="tree-lead" class="lead">
+            Enter some numbers: smaller values go to the left subtree, larger ones to the right.
+            Then run an operation and step through the algorithm one move at a time.
+          </p>
+        </header>
+
+        <div class="controls">
+          <span class="field-label">Type</span>
+          <div class="segmented" role="tablist" aria-label="Tree type">
+            <button type="button" data-kind="bst" class="active">Binary search tree</button>
+            <button type="button" data-kind="rb">Red-Black tree</button>
+          </div>
+        </div>
+
+        <form id="tree-form" class="controls" novalidate>
+          <label for="values" class="field-label">Array</label>
+          <input
+            id="values"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="e.g. 50, 30, 70, 20, 40, 60, 80"
+            value="50, 30, 70, 20, 40, 60, 80, 35, 65"
+          />
+          <button id="build" type="submit" class="primary">Create binary tree</button>
+          <button id="random" type="button" class="ghost" title="Random array">Random</button>
+        </form>
+
+        <form id="op-form" class="controls ops" novalidate>
+          <label for="target" class="field-label">Value</label>
+          <input id="target" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 40" disabled />
+          <button id="search" type="submit" class="op search" disabled>Search</button>
+          <button id="insert" type="submit" class="op insert" disabled>Insert</button>
+          <button id="delete" type="submit" class="op delete" disabled>Delete</button>
+          <span class="ops-sep"></span>
+          <button id="paint" type="button" class="op rb-op only-bst" disabled
+            title="Try to color this exact tree as a red-black tree">Paint as Red-Black</button>
+          <button id="black-depth" type="button" class="op rb-op only-rb" disabled hidden
+            title="Compute the black depth of every node and check the red-black rules">Black depth</button>
+        </form>
+
+        <p id="error" class="error" role="alert" hidden></p>
+
+        <section class="board">
+          <div class="stats">
+            <div id="stats" class="stats-values"></div>
+            <span id="save-state" class="save-state"></span>
+          </div>
+          <div class="board-body">
+            <!-- left: the data structure -->
+            <div class="viz-col">
+              <div id="canvas" class="canvas">
+                <p class="placeholder">Your tree will appear here</p>
+              </div>
+              <div id="tree-ds" class="ds-panel" hidden></div>
+            </div>
+
+            <!-- right: the Python code + the steps -->
+            <aside class="side-col">
+              <div class="code-panel">
+                <div id="code-title" class="code-title">Python code</div>
+                <div id="code-body" class="code-body"></div>
+              </div>
+              <div id="player" class="player" hidden aria-live="polite">
+                <div class="player-head">
+                  <h2 id="player-title"></h2>
+                  <span id="player-counter" class="counter"></span>
+                </div>
+                <p id="player-message" class="player-message"></p>
+                <div id="player-outcome" class="outcome" hidden></div>
+                <div class="player-controls">
+                  <button id="prev" type="button" class="ghost small">← Prev</button>
+                  <button id="play" type="button" class="ghost small">▶ Play</button>
+                  <button id="next" type="button" class="primary small">Next →</button>
+                </div>
+                <ol id="player-steps" class="steps"></ol>
+                <p class="hint">Tip: use the ← → keys to step.</p>
+              </div>
+            </aside>
+          </div>
+          <div class="legend">
+            <span class="only-bst"><i class="dot root"></i>root</span>
+            <span class="only-bst"><i class="dot left"></i>left child (smaller)</span>
+            <span class="only-bst"><i class="dot right"></i>right child (larger)</span>
+            <span class="only-rb" hidden><i class="sw rb-black"></i>black node</span>
+            <span class="only-rb" hidden><i class="sw rb-red"></i>red node</span>
+            <span><i class="sw current"></i>current</span>
+            <span><i class="sw path"></i>visited path</span>
+            <span><i class="sw found"></i>found</span>
+            <span><i class="sw remove"></i>to delete</span>
+            <span><i class="sw successor"></i>successor</span>
+            <span class="only-rb" hidden><i class="sw db"></i>DB = double black</span>
+          </div>
+        </section>
+
+        <section id="traversals" class="traversals" hidden></section>
+      </section>
+
+      <!-- ===================== Graphs ===================== -->
+      <section id="view-graphs" class="view" hidden>
+        <header class="hero">
+          <h1>Graphs</h1>
+          <p class="lead">
+            Name a node and create it — a section for that node appears below, where you connect it to
+            other nodes. Drag nodes to move them. Then run an algorithm step by step.
+          </p>
+        </header>
+
+        <div class="subtabs" role="tablist" aria-label="Graph type">
+          <button type="button" data-directed="false" class="active">Undirected graph</button>
+          <button type="button" data-directed="true">Directed graph</button>
+        </div>
+
+        <form id="g-node-form" class="controls" novalidate>
+          <label for="g-name" class="field-label">Node</label>
+          <input id="g-name" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Node name, e.g. A" />
+          <button type="submit" class="primary">Create node</button>
+          <button id="g-example" type="button" class="ghost">Load example</button>
+          <button id="g-clear" type="button" class="ghost danger">Clear graph</button>
+        </form>
+
+        <div class="controls">
+          <span class="field-label">Cycles</span>
+          <div class="segmented" id="g-cycles" role="tablist" aria-label="Cycles">
+            <button type="button" data-cycles="allowed" class="active">Allowed</button>
+            <button type="button" data-cycles="forbidden">Not allowed (acyclic)</button>
+          </div>
+          <span id="g-status" class="g-status"></span>
+        </div>
+
+        <form id="g-algo-form" class="controls" novalidate>
+          <label for="g-algo" class="field-label">Run</label>
+          <select id="g-algo">
+            <option value="cycle">Cycle check (DFS)</option>
+            <option value="bfs">BFS — breadth-first search</option>
+            <option value="dfs">DFS — depth-first search</option>
+            <option value="dijkstra">Dijkstra</option>
+            <option value="greedy">Greedy best-first search</option>
+            <option value="astar">A*</option>
+            <option value="bellman_ford">Bellman-Ford</option>
+            <option value="topo">Topological sort</option>
+          </select>
+          <label class="inline-field" id="g-start-wrap">from <select id="g-start"></select></label>
+          <label class="inline-field" id="g-goal-wrap">to <select id="g-goal"></select></label>
+          <button id="g-run" type="submit" class="primary">Run step by step</button>
+        </form>
+        <div id="g-note" class="algo-note"></div>
+
+        <p id="g-error" class="error" role="alert" hidden></p>
+
+        <section class="board">
+          <div class="stats">
+            <div id="g-stats" class="stats-values"></div>
+            <button id="g-reset-view" type="button" class="ghost small" hidden>Clear highlighting</button>
+          </div>
+          <div class="board-body">
+            <div class="viz-col">
+              <div id="g-canvas" class="canvas graph-canvas"></div>
+              <div id="g-ds" class="ds-panel" hidden></div>
+            </div>
+            <aside class="side-col">
+              <div class="code-panel">
+                <div id="g-code-title" class="code-title">Python code</div>
+                <div id="g-code-body" class="code-body"></div>
+              </div>
+              <div id="g-player" class="player" hidden aria-live="polite">
+                <div class="player-head">
+                  <h2 id="g-player-title"></h2>
+                  <span id="g-player-counter" class="counter"></span>
+                </div>
+                <p id="g-player-message" class="player-message"></p>
+                <div id="g-player-outcome" class="outcome" hidden></div>
+                <div class="player-controls">
+                  <button id="g-prev" type="button" class="ghost small">← Prev</button>
+                  <button id="g-play" type="button" class="ghost small">▶ Play</button>
+                  <button id="g-next" type="button" class="primary small">Next →</button>
+                </div>
+                <ol id="g-player-steps" class="steps"></ol>
+                <p class="hint">Tip: use the ← → keys to step.</p>
+              </div>
+            </aside>
+          </div>
+          <div class="legend">
+            <span><i class="sw current"></i>current</span>
+            <span><i class="sw frontier"></i>waiting (in the queue / stack)</span>
+            <span><i class="sw visited"></i>visited / done</span>
+            <span><i class="sw found"></i>path / tree edges</span>
+            <span><i class="sw cycle"></i>cycle</span>
+          </div>
+        </section>
+
+        <h2 class="section-title">Nodes <span id="g-count" class="muted"></span></h2>
+        <div id="g-sections" class="node-sections"></div>
+      </section>
+
+      <!-- ===================== Practice ===================== -->
+      <section id="view-practice" class="view" hidden>
+        <div class="coming-soon">
+          <p class="cs-eyebrow">Practice</p>
+          <h1>Coming soon…</h1>
+          <p class="lead">
+            Exercises to test yourself on trees and graphs are on the way.
+            Meanwhile, try the step-by-step visualizers.
+          </p>
+          <div class="cs-actions">
+            <a class="button primary" href="#/">Trees</a>
+            <a class="button ghost" href="#/graphs">Graphs</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== History ===================== -->
+      <section id="view-history" class="view" hidden>
+        <header class="hero">
+          <h1>History</h1>
+          <p id="history-user" class="lead">Every tree you built and every operation you ran on it.</p>
+        </header>
+        <p id="history-error" class="error" role="alert" hidden></p>
+        <div id="history-list" class="history-list"></div>
+      </section>
+    </main>
+
+    <!-- ===================== Log in / Sign up ===================== -->
+    <dialog id="auth-dialog" class="auth-dialog">
+      <form id="auth-form" novalidate>
+        <h2 id="auth-title">Log in</h2>
+        <p id="auth-reason" class="auth-reason" hidden></p>
+        <label id="auth-name-row" hidden>
+          Your name
+          <input id="auth-name" name="name" autocomplete="name" maxlength="60" />
+        </label>
+        <label>
+          Username
+          <input id="auth-username" name="username" autocomplete="username" required />
+        </label>
+        <label>
+          Password
+          <input id="auth-password" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <p id="auth-hint" class="auth-hint" hidden>At least 6 characters.</p>
+        <p id="auth-error" class="error" role="alert" hidden></p>
+        <div class="auth-actions">
+          <button id="auth-cancel" type="button" class="ghost">Cancel</button>
+          <button id="auth-submit" type="submit" class="primary">Log in</button>
+        </div>
+        <p class="auth-switch">
+          <span id="auth-switch-text">No account yet?</span>
+          <button id="auth-switch" type="button" class="link">Sign up</button>
+        </p>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
