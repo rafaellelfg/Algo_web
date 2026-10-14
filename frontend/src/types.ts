@@ -106,6 +106,47 @@ export interface User {
   username: string;
   /** the name given at registration */
   name: string;
+  /** staff account — may use the admin login */
+  is_admin: boolean;
+}
+
+export type Role = "user" | "admin";
+
+/** What register / login / admin verify / refresh return */
+export interface LoginResponse {
+  user: User;
+  token: string;
+  token_type: "Bearer";
+  role: Role;
+  expires_at: string;
+  expires_in: number;
+}
+
+export interface AdminChallenge {
+  challenge_id: string;
+  question: string;
+  expires_in: number;
+  attempts_left: number;
+}
+
+/** A Bearer key as listed by the server (never the key itself, only its prefix) */
+export interface ApiKeyInfo {
+  id: number;
+  prefix: string;
+  role: Role;
+  label: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  active: boolean;
+  current: boolean;
+}
+
+export interface AdminUser extends User {
+  date_joined: string;
+  last_login: string | null;
+  trees: number;
+  active_keys: number;
 }
 
 export type OperationKind = "create" | TreeOp;

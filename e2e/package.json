@@ -1,0 +1,18 @@
+{
+  "name": "algo-website-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "End-to-end browser tests (Playwright + TypeScript): login, trees, graphs",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.10.0",
+    "typescript": "~5.6.3"
+  }
+}

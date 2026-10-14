@@ -2,4 +2,7 @@ node_modules/
 dist/
 venv/
 __pycache__/
+.mypy_cache/
 *.sqlite3
+test-results/
+playwright-report/

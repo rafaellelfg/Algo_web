@@ -1,8 +1,9 @@
+"""Trees: the algorithms (algorithms/) and the tree / history API (api/api.py)."""
 import json
 
 from django.test import TestCase
 
-from .bst import BinarySearchTree, build_tree
+from algorithms.algorithms import BSTAlgorithms as BinarySearchTree, build_tree
 
 
 def values_of(d):
@@ -90,6 +91,29 @@ class DeleteTests(TestCase):
         self.assertIsNone(t.root)
 
 
+class ApiTestCase(TestCase):
+    """Test client that sends the Bearer key it got from register / login."""
+
+    token = None
+
+    def _headers(self):
+        return {"HTTP_AUTHORIZATION": f"Bearer {self.token}"} if self.token else {}
+
+    def post(self, url, body):
+        r = self.client.post(url, data=json.dumps(body), content_type="application/json", **self._headers())
+        if url in ("/api/auth/register/", "/api/auth/login/") and r.status_code == 200:
+            self.token = r.json()["token"]
+        if url == "/api/auth/logout/":
+            self.token = None
+        return r
+
+    def get(self, url):
+        return self.client.get(url, **self._headers())
+
+    def delete(self, url):
+        return self.client.delete(url, **self._headers())
+
+
 class APITests(TestCase):
     def post(self, url, body):
         return self.client.post(url, data=json.dumps(body), content_type="application/json")
@@ -119,17 +143,14 @@ class APITests(TestCase):
         self.assertEqual(self.post("/api/tree/search/", {"tree": bad, "target": 5}).status_code, 400)
 
 
-class HistoryTests(TestCase):
-    def post(self, url, body):
-        return self.client.post(url, data=json.dumps(body), content_type="application/json")
-
+class HistoryTests(ApiTestCase):
     def register(self, name="alice"):
         return self.post("/api/auth/register/", {"username": name, "name": f"{name.title()} Smith", "password": "s3cret-pass"})
 
     def test_anonymous_has_no_history(self):
         r = self.post("/api/tree/", {"values": [1, 2]}).json()
         self.assertIsNone(r["tree_id"])
-        self.assertEqual(self.client.get("/api/history/").status_code, 401)
+        self.assertEqual(self.get("/api/history/").status_code, 401)
 
     def test_operations_are_recorded(self):
         self.assertEqual(self.register().status_code, 200)
@@ -141,7 +162,7 @@ class HistoryTests(TestCase):
         r = self.post("/api/tree/delete/", {"tree": created["root"], "target": 50, "tree_id": tid}).json()
         self.assertEqual(r["size"], 2)
 
-        trees = self.client.get("/api/history/").json()["trees"]
+        trees = self.get("/api/history/").json()["trees"]
         self.assertEqual(len(trees), 1)
         ops = trees[0]["operations"]
         self.assertEqual([o["kind"] for o in ops], ["create", "search", "delete"])
@@ -149,7 +170,7 @@ class HistoryTests(TestCase):
         self.assertEqual(trees[0]["size"], 2)
         self.assertEqual(trees[0]["root"]["value"], 70)
 
-        op = self.client.get(f"/api/history/{tid}/operations/{ops[2]['id']}/").json()["operation"]
+        op = self.get(f"/api/history/{tid}/operations/{ops[2]['id']}/").json()["operation"]
         self.assertEqual(op["steps"][-1]["status"], "done")
 
     def test_users_are_isolated(self):
@@ -157,13 +178,13 @@ class HistoryTests(TestCase):
         tid = self.post("/api/tree/", {"values": [1]}).json()["tree_id"]
         self.post("/api/auth/logout/", {})
         self.register("bob")
-        self.assertEqual(self.client.get(f"/api/history/{tid}/").status_code, 404)
-        self.assertEqual(self.client.get("/api/history/").json()["trees"], [])
+        self.assertEqual(self.get(f"/api/history/{tid}/").status_code, 404)
+        self.assertEqual(self.get("/api/history/").json()["trees"], [])
 
     def test_login_and_errors(self):
         self.register("alice")
         self.post("/api/auth/logout/", {})
-        self.assertEqual(self.client.get("/api/auth/me/").json()["user"], None)
+        self.assertEqual(self.get("/api/auth/me/").json()["user"], None)
         self.assertEqual(self.register("Alice").status_code, 400)  # taken (case-insensitive)
         self.assertEqual(self.post("/api/auth/login/", {"username": "alice", "password": "nope"}).status_code, 401)
         r = self.post("/api/auth/login/", {"username": "alice", "password": "s3cret-pass"})
@@ -182,7 +203,7 @@ class HistoryTests(TestCase):
         self.assertNotEqual(stored, "s3cret-pass")  # only the hash is in the database
         self.assertTrue(stored.startswith("pbkdf2_sha256$"))
         self.post("/api/tree/", {"values": [3, 1, 2]})
-        data = self.client.get("/api/history/").json()
+        data = self.get("/api/history/").json()
         self.assertEqual(data["user"]["id"], me["id"])
         self.assertEqual(data["trees"][0]["user_id"], me["id"])
         self.assertEqual(data["trees"][0]["initial_values"], [3, 1, 2])
@@ -191,31 +212,33 @@ class HistoryTests(TestCase):
         self.register()
         r = self.post("/api/tree/", {"values": [1, 2], "save": False}).json()
         self.assertIsNone(r["tree_id"])
-        self.assertEqual(self.client.get("/api/history/").json()["trees"], [])
+        self.assertEqual(self.get("/api/history/").json()["trees"], [])
 
     def test_delete_from_history(self):
         self.register()
         tid = self.post("/api/tree/", {"values": [1]}).json()["tree_id"]
-        self.assertEqual(self.client.delete(f"/api/history/{tid}/").status_code, 200)
-        self.assertEqual(self.client.get("/api/history/").json()["trees"], [])
+        self.assertEqual(self.delete(f"/api/history/{tid}/").status_code, 200)
+        self.assertEqual(self.get("/api/history/").json()["trees"], [])
 
-    def test_csrf_is_enforced(self):
-        from django.test import Client
-        c = Client(enforce_csrf_checks=True)
-        r = c.post("/api/tree/", data=json.dumps({"values": [1]}), content_type="application/json")
-        self.assertEqual(r.status_code, 403)
-        c.get("/api/auth/me/")
-        token = c.cookies["csrftoken"].value
-        r = c.post("/api/tree/", data=json.dumps({"values": [1]}), content_type="application/json", HTTP_X_CSRFTOKEN=token)
-        self.assertEqual(r.status_code, 200)
+    def test_api_ignores_session_cookies(self):
+        """Only the Bearer key counts on the API — a Django session cookie does not log you in."""
+        from django.contrib.auth.models import User
+        User.objects.create_user("eve", password="s3cret-pass")
+        self.client.login(username="eve", password="s3cret-pass")  # session cookie
+        self.assertEqual(self.client.get("/api/history/").status_code, 401)
+        self.assertIsNone(self.client.get("/api/auth/me/").json()["user"])
+
+    def test_save_existing_tree_as_is(self):
+        self.register()
+        rb = self.post("/api/tree/", {"values": [1, 2, 3, 4, 5, 6], "kind": "rb", "save": False}).json()
+        saved = self.post("/api/tree/", {"tree": rb["root"], "kind": "rb"}).json()
+        self.assertIsNotNone(saved["tree_id"])
+        self.assertEqual(saved["root"], rb["root"])  # same shape and colors
 
 
-class RedBlackTests(TestCase):
-    def post(self, url, body):
-        return self.client.post(url, data=json.dumps(body), content_type="application/json")
-
+class RedBlackTests(ApiTestCase):
     def test_build_rb_and_ops(self):
-        from .rbtree import RedBlackTree
+        from algorithms.algorithms import RedBlackAlgorithms as RedBlackTree
         r = self.post("/api/tree/", {"values": list(range(1, 16)), "kind": "rb"}).json()
         self.assertEqual(r["kind"], "rb")
         self.assertEqual(r["root"]["color"], "black")
@@ -262,7 +285,7 @@ class RedBlackTests(TestCase):
         c = self.post("/api/tree/", {"values": [2, 1, 3]}).json()
         r = self.post("/api/tree/op/", {"op": "paint", "tree_id": c["tree_id"], "tree": c["root"]}).json()
         self.assertTrue(r["found"])
-        tree = self.client.get("/api/history/").json()["trees"][0]
+        tree = self.get("/api/history/").json()["trees"][0]
         self.assertEqual(tree["kind"], "rb")
         self.assertEqual([o["kind"] for o in tree["operations"]], ["create", "paint"])
         # next op runs on the saved red-black tree
@@ -273,9 +296,9 @@ class RedBlackTests(TestCase):
         """Every step's code tag must point to at least one line of the shown code."""
         import random
         import re
-        from .code import code_for
-        from .rbtree import RedBlackTree, paint_steps
-        from .bst import BinarySearchTree
+        from algorithms.code import tree_code as code_for
+        from algorithms.algorithms import RedBlackAlgorithms as RedBlackTree, paint_steps
+        from algorithms.algorithms import BSTAlgorithms as BinarySearchTree
 
         def tags(code):
             out = set()
@@ -299,3 +322,32 @@ class RedBlackTests(TestCase):
             b, _ = BinarySearchTree.build(vals)
             _, steps, _ = paint_steps(b)
             self.assertFalse({s["code"] for s in steps} - tags(code_for("bst", "paint")))
+
+
+class RedBlackFuzzTests(TestCase):
+    """Random inserts / deletes must always keep every red-black rule."""
+
+    def test_random_operations(self):
+        import random
+        from algorithms.algorithms import RedBlackAlgorithms
+        from algorithms.build import RedBlackTree as PlainRedBlackTree
+
+        rng = random.Random(42)
+        for _ in range(40):
+            vals = rng.sample(range(120), rng.randint(1, 40))
+            plain, _ = PlainRedBlackTree.build(vals)  # build.py (no steps)
+            self.assertIsNone(plain.violation())
+            t, _ = RedBlackAlgorithms.build(vals)
+            ref = set(vals)
+            for _ in range(40):
+                v = rng.randint(0, 119)
+                if rng.random() < 0.5:
+                    ok, _ = t.insert_steps(v)
+                    self.assertEqual(ok, v not in ref)
+                    ref.add(v)
+                else:
+                    ok, _ = t.delete_steps(v)
+                    self.assertEqual(ok, v in ref)
+                    ref.discard(v)
+                self.assertIsNone(t.violation())
+                self.assertEqual(t._traverse("in"), sorted(ref))

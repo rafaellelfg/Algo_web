@@ -13,6 +13,7 @@
           <a href="#/graphs" data-route="graphs">Graphs</a>
           <a href="#/practice" data-route="practice">Practice</a>
           <a href="#/history" data-route="history">History</a>
+          <a href="#/admin" data-route="admin" id="admin-tab" hidden>Admin</a>
         </div>
         <div id="account" class="account">
           <!-- filled by auth.ts -->
@@ -236,6 +237,19 @@
         </div>
       </section>
 
+      <!-- ===================== Admin ===================== -->
+      <section id="view-admin" class="view" hidden>
+        <header class="hero">
+          <h1>Admin</h1>
+          <p class="lead">
+            Every user and every active API key. You are using an ADMIN key (password + admin phrase);
+            it lives 30 minutes and is renewed automatically while this page is open.
+          </p>
+        </header>
+        <p id="admin-error" class="error" role="alert" hidden></p>
+        <div id="admin-content"></div>
+      </section>
+
       <!-- ===================== History ===================== -->
       <section id="view-history" class="view" hidden>
         <header class="hero">
@@ -256,13 +270,19 @@
           Your name
           <input id="auth-name" name="name" autocomplete="name" maxlength="60" />
         </label>
-        <label>
-          Username
-          <input id="auth-username" name="username" autocomplete="username" required />
-        </label>
-        <label>
-          Password
-          <input id="auth-password" name="password" type="password" autocomplete="current-password" required />
+        <div id="auth-cred-rows" class="auth-rows">
+          <label>
+            Username
+            <input id="auth-username" name="username" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input id="auth-password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+        </div>
+        <label id="auth-phrase-row" hidden>
+          <span id="auth-question">Admin check: type the admin phrase.</span>
+          <input id="auth-phrase" name="phrase" type="password" autocomplete="off" spellcheck="false" />
         </label>
         <p id="auth-hint" class="auth-hint" hidden>At least 6 characters.</p>
         <p id="auth-error" class="error" role="alert" hidden></p>
@@ -273,8 +293,37 @@
         <p class="auth-switch">
           <span id="auth-switch-text">No account yet?</span>
           <button id="auth-switch" type="button" class="link">Sign up</button>
+          <span class="sep">·</span>
+          <button id="auth-admin-switch" type="button" class="link">Admin login</button>
         </p>
       </form>
+    </dialog>
+
+    <!-- ===================== API key (Bearer) ===================== -->
+    <dialog id="key-dialog" class="auth-dialog key-dialog">
+      <div class="key-body">
+        <h2>Your API key</h2>
+        <p class="muted small">
+          Every request to the API sends it in the header <code>Authorization: Bearer …</code>.
+          It is dynamic: each login gets a new random key, a fresh one replaces it before it expires,
+          and logging out kills it. The server keeps only a hash of it.
+        </p>
+        <div class="key-box">
+          <code id="key-value"></code>
+          <button id="key-show" type="button" class="ghost small">Show</button>
+          <button id="key-copy" type="button" class="ghost small">Copy</button>
+        </div>
+        <div class="key-meta"><span id="key-role" class="role-tag"></span> <span id="key-expiry" class="muted small"></span></div>
+        <p class="nc-label">Use it from the command line</p>
+        <pre id="key-curl" class="key-curl"></pre>
+        <p class="nc-label">Your active keys</p>
+        <div id="key-list" class="key-list"></div>
+        <p id="key-error" class="error" role="alert" hidden></p>
+        <div class="auth-actions">
+          <button id="key-rotate" type="button" class="ghost">Make a new key now</button>
+          <button id="key-close" type="button" class="primary">Close</button>
+        </div>
+      </div>
     </dialog>
 
     <script type="module" src="/src/main.ts"></script>

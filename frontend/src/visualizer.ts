@@ -1,4 +1,4 @@
-import { createTree, treeOp } from "./api";
+import { ApiError, createTree, saveExistingTree, treeOp } from "./api";
 import { auth } from "./auth";
 import { CodePanel } from "./codeview";
 import { renderDataStructure } from "./dsview";
@@ -119,7 +119,11 @@ function resetSteps(): void {
   renderDataStructure(dsBox, undefined);
 }
 
-function showSummary(data: TreeSummary, duplicates: number[] = []): void {
+/**
+ * Show the stats / traversals of a tree. `syncInput`: put its pre-order into the Array field
+ * (only when the tree itself changed — a search must not overwrite what the user typed).
+ */
+function showSummary(data: TreeSummary, duplicates: number[] = [], syncInput = true): void {
   currentTree = data.root;
   if (data.kind !== currentKind) setKind(data.kind);
   const dup = duplicates.length
@@ -140,8 +144,8 @@ function showSummary(data: TreeSummary, duplicates: number[] = []): void {
     .join("");
   traversals.hidden = false;
 
-  // keep the input in sync: building from the pre-order reproduces this exact shape
-  valuesInput.value = data.traversals.preorder.join(", ");
+  // building a BST from the pre-order reproduces this exact shape
+  if (syncInput) valuesInput.value = data.traversals.preorder.join(", ");
 
   const hasTree = currentTree !== null;
   searchBtn.disabled = deleteBtn.disabled = !hasTree;
@@ -172,28 +176,15 @@ function renderSaveState(): void {
   }
 }
 
-function preorder(node: TreeNode | null, out: number[] = []): number[] {
-  if (node) {
-    out.push(node.value);
-    preorder(node.left, out);
-    preorder(node.right, out);
-  }
-  return out;
-}
-
-/**
- * Save the tree on screen. For a plain BST, rebuilding from its pre-order gives the same shape.
- * (A red-black tree built from that order may balance differently, so it is saved as built.)
- */
+/** Save the tree on screen exactly as it is (same shape and colors — also after paint / deletes) */
 async function saveCurrent(btn: HTMLButtonElement): Promise<void> {
-  const values = preorder(currentTree);
-  if (!values.length) return;
+  if (!currentTree) return;
   btn.disabled = true;
   try {
-    const data = await createTree(values, currentKind, true);
+    const data = await saveExistingTree(currentTree, currentKind);
     currentTreeId = data.tree_id;
     resetSteps();
-    showSummary(data, data.duplicates);
+    showSummary(data, data.duplicates, false);
     draw(data.root);
   } catch (e) {
     showError((e as Error).message);
@@ -254,10 +245,23 @@ async function runOp(op: TreeOp, btn: HTMLButtonElement): Promise<void> {
     if (target === null) return;
   }
   showError(null);
-  const data = await busy(btn, "Running…", () => treeOp(op, currentKind, currentTree, target, currentTreeId));
+  const call = () => treeOp(op, currentKind, currentTree, target, currentTreeId);
+  const data = await busy(btn, "Running…", async () => {
+    try {
+      return await call();
+    } catch (e) {
+      // the saved tree was deleted (e.g. in History) → keep working on the copy on screen
+      if (e instanceof ApiError && e.status === 404 && currentTreeId !== null) {
+        currentTreeId = null;
+        return await call();
+      }
+      throw e;
+    }
+  });
   if (!data) return;
   currentTreeId = data.tree_id;
-  showSummary(data);
+  const changedShape = data.found && (op === "insert" || op === "delete" || op === "paint");
+  showSummary(data, [], changedShape);
   const title = `${OP_TITLES[op]}${target !== null ? ` ${fmt(target)}` : ""}`;
   code.set(data.code, title);
   player.load(title, data.steps, data.outcome);

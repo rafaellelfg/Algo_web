@@ -1,10 +1,12 @@
+import os
+from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Fine for a local/learning project. In production, read the key from an environment variable.
-SECRET_KEY = "django-insecure-change-me-binary-tree-demo"
-DEBUG = True
+# Fine for a local/learning project. In production set these as environment variables.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-change-me-binary-tree-demo")
+DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 INSTALLED_APPS = [
@@ -14,9 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "accounts",
-    "tree",
-    "graphs",
+    "api",  # login.py + api.py (the data structures and algorithms are in ../algorithms/)
 ]
 
 MIDDLEWARE = [
@@ -44,8 +44,30 @@ TEMPLATES = [
     },
 ]
 
-# Login is kept in a session cookie; the frontend sends the CSRF token in a header.
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 days
+# ---- API authentication: "Authorization: Bearer <key>" -------------------
+# Keys are random, short-lived and rotated by the frontend ("dynamic").
+# The database stores only HMAC-SHA256 hashes of them (see api/login.py).
+TOKEN_HASH_KEY = os.environ.get("TOKEN_HASH_KEY", SECRET_KEY)
+TOKEN_TTL = {
+    "user": timedelta(hours=12),
+    "admin": timedelta(minutes=30),  # admin keys live much shorter
+}
+MAX_ACTIVE_TOKENS_PER_USER = 10
+
+# Admin login = password + the admin phrase. Only its PBKDF2 hash is stored here.
+# Default phrase: IB002. New hash: python manage.py hash_phrase "NEW PHRASE"
+ADMIN_PHRASE_HASH = os.environ.get(
+    "ADMIN_PHRASE_HASH",
+    "pbkdf2_sha256$310000$9f1c2b7e4d8a6035b1e2c3d4a5f60718$yDoF0Or3/hIAx6X4x5DVd8Dl0SLHoqvgtQOEsJD1lNM=",
+)
+ADMIN_CHALLENGE_TTL = timedelta(minutes=5)
+ADMIN_CHALLENGE_ATTEMPTS = 3
+
+# Brute-force protection for logins
+LOGIN_MAX_FAILURES = 10
+LOGIN_LOCKOUT = timedelta(minutes=10)
+
+# The Django admin site (/admin/) still uses its own session cookie + CSRF.
 CSRF_TRUSTED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 AUTH_PASSWORD_VALIDATORS = [

@@ -1,3 +1,4 @@
+"""Graphs: the algorithms (algorithms/) and the graph API (api/api.py)."""
 import itertools
 import json
 import math
@@ -6,8 +7,9 @@ import re
 
 from django.test import TestCase
 
-from .algorithms import Graph, run
-from .code import code_for
+from algorithms.algorithms import run
+from algorithms.build import Graph
+from algorithms.code import graph_code as code_for
 
 
 def random_graph(rng, directed, n=None, p=0.3, negative=False, euclid=False):

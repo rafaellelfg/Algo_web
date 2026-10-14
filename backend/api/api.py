@@ -1,33 +1,45 @@
-"""Tree API.
+"""ALL API ENDPOINTS (except login, see login.py).
 
-Anyone can build trees and run operations. If the user is logged in, every
-tree and every operation is also saved to their history.
+Trees
+  POST   /api/tree/                  build a tree   {"values": [5, 3, 8], "kind": "bst"|"rb", "save"?}
+                                     or save an existing one as it is  {"tree": {...}, "kind": ...}
+  POST   /api/tree/op/               run an operation step by step
+                                     {"op": search|insert|delete|paint|black_depth, "kind", "tree", "target"?, "tree_id"?}
+  POST   /api/tree/search/, /api/tree/delete/       shortcuts for op=search / op=delete
+History (needs a Bearer key)
+  GET    /api/history/               my trees with their operations
+  GET    /api/history/<id>/          one tree          DELETE /api/history/<id>/   remove it
+  GET    /api/history/<id>/operations/<op>/          one operation with its steps (replay)
+Graphs
+  POST   /api/graph/analyze/         is the graph cyclic?   {"directed", "nodes", "edges"}
+  POST   /api/graph/run/             run an algorithm step by step  {..., "algorithm", "start"?, "goal"?}
+Admin (needs an ADMIN Bearer key)
+  GET    /api/admin/users/           all users          GET /api/admin/tokens/   all active keys
+  DELETE /api/admin/tokens/<id>/     revoke a key       DELETE /api/admin/users/<id>/tokens/   log a user out everywhere
 
-POST   /api/tree/                         {"values": [5, 3, 8], "kind": "bst"|"rb", "save": true?}
-POST   /api/tree/op/                      {"op": ..., "kind": ..., "tree": {...}, "target": 3?, "tree_id": 7?}
-          op = search | insert | delete           (both kinds)
-               paint                              (bst: try to color it as a red-black tree)
-               black_depth                        (rb: check black depths / black height)
-POST   /api/tree/search/, /api/tree/delete/       shortcuts for op=search / op=delete
-GET    /api/history/                      list of my trees with their operations
-GET    /api/history/<id>/                 one tree
-DELETE /api/history/<id>/                 remove a tree from my history
-GET    /api/history/<id>/operations/<op>/ one operation with its steps (for replay)
+The data structures and algorithms themselves are in ../algorithms/.
 """
 import math
 from typing import Any, Optional
 
+from django.contrib.auth.models import User
 from django.db import transaction
+from django.db.models import Count, Q
+from django.utils import timezone
 
-from config.api import BadRequest, NotFound, api_view
+from algorithms.algorithms import ALGORITHMS, TREE_CLASSES, Graph, cycle_check, paint_steps, run
+from algorithms.build import fmt
+from algorithms.code import graph_code, tree_code
 
-from .bst import BinarySearchTree, fmt
-from .code import code_for
-from .models import Operation, SavedTree
-from .rbtree import RedBlackTree, paint_steps
+from .core import BadRequest, NotFound, api_view
+from .login import revoke, token_json, user_json
+from .models import ApiToken, Operation, SavedTree
 
+
+# ======================================================================
+# Trees and history
+# ======================================================================
 MAX_VALUES = 200
-TREE_CLASSES = {"bst": BinarySearchTree, "rb": RedBlackTree}
 OPS = {
     "bst": ("search", "insert", "delete", "paint"),
     "rb": ("search", "insert", "delete", "black_depth"),
@@ -67,15 +79,20 @@ def _my_tree(request, tree_id: Any) -> Optional[SavedTree]:
 # ---------------------------------------------------------------- tree ops
 @api_view()
 def create_tree(request, data):
-    values = data.get("values")
-    if not isinstance(values, list) or not values:
-        raise BadRequest("Send a non-empty array of numbers in the 'values' field.")
-    if len(values) > MAX_VALUES:
-        raise BadRequest(f"At most {MAX_VALUES} numbers are allowed.")
     kind = _kind(data.get("kind"))
-
-    numbers = [_number(v) for v in values]
-    tree, duplicates = TREE_CLASSES[kind].build(numbers)
+    if data.get("tree") is not None:
+        # save an existing tree exactly as it is (rebuilding a red-black tree from
+        # its numbers could give a different shape)
+        tree = TREE_CLASSES[kind].from_dict(data["tree"])
+        numbers, duplicates = tree._traverse("pre"), []
+    else:
+        values = data.get("values")
+        if not isinstance(values, list) or not values:
+            raise BadRequest("Send a non-empty array of numbers in the 'values' field.")
+        if len(values) > MAX_VALUES:
+            raise BadRequest(f"At most {MAX_VALUES} numbers are allowed.")
+        numbers = [_number(v) for v in values]
+        tree, duplicates = TREE_CLASSES[kind].build(numbers)
     result = {**tree.summary(), "duplicates": duplicates, "tree_id": None}
 
     # "save": false lets the frontend build the demo tree without filling the history
@@ -140,7 +157,7 @@ def _run(request, data, op: str) -> dict:
         "found": ok,
         "outcome": outcome,
         "steps": steps,
-        "code": code_for(kind, op),
+        "code": tree_code(kind, op),
         **tree.summary(),  # the tree after the operation (kind becomes "rb" after painting)
     }
 
@@ -189,7 +206,7 @@ def _operation_json(op: Operation, with_steps: bool = False) -> dict:
     }
     if with_steps:
         d["steps"] = op.steps
-        d["code"] = code_for(op.tree_kind, op.kind)
+        d["code"] = tree_code(op.tree_kind, op.kind)
     return d
 
 
@@ -210,11 +227,7 @@ def _tree_json(t: SavedTree) -> dict:
 @api_view(methods=("GET",), login_required=True)
 def history(request, data):
     trees = SavedTree.objects.filter(user=request.user).prefetch_related("operations")
-    user = request.user
-    return {
-        "user": {"id": user.id, "username": user.username, "name": user.first_name or user.username},
-        "trees": [_tree_json(t) for t in trees],
-    }
+    return {"user": user_json(request.user), "trees": [_tree_json(t) for t in trees]}
 
 
 @api_view(methods=("GET", "DELETE"), login_required=True)
@@ -235,3 +248,95 @@ def history_operation(request, data, tree_id: int, op_id: int):
     except Operation.DoesNotExist:
         raise NotFound("Operation not found.")
     return {"operation": _operation_json(op, with_steps=True)}
+
+
+# ======================================================================
+# Graphs (stateless: the frontend sends the whole graph every time)
+# ======================================================================
+def _graph(data: dict) -> Graph:
+    # a bad graph raises GraphError → @api_view answers 400 with its message
+    return Graph(data.get("directed", False), data.get("nodes", []), data.get("edges", []))
+
+
+@api_view()
+def analyze(request, data):
+    g = _graph(data)
+    res = cycle_check(g, with_steps=False)
+    cyc = res["cycle"]
+    return {
+        "cyclic": res["cyclic"],
+        "cycle": cyc,
+        "cycle_edges": g.pairs(cyc),
+        "cycle_text": res.get("cycle_text", ""),
+        "negative_edges": any(w < 0 for _, _, w in g.edges),
+    }
+
+
+@api_view()
+def run_algorithm(request, data):
+    g = _graph(data)
+    algorithm = data.get("algorithm")
+    result = run(g, algorithm, data.get("start"), data.get("goal"))
+    return {
+        "algorithm": algorithm,
+        "title": ALGORITHMS[algorithm][0],
+        "code": graph_code(algorithm, g.directed),
+        **result,
+    }
+
+
+# ======================================================================
+# Admin
+# ======================================================================
+@api_view(methods=("GET",), admin_required=True)
+def admin_users(request, data):
+    now = timezone.now()
+    rows = User.objects.annotate(
+        tree_count=Count("trees", distinct=True),
+        active_keys=Count(
+            "api_tokens",
+            filter=Q(api_tokens__revoked_at__isnull=True, api_tokens__expires_at__gt=now),
+            distinct=True,
+        ),
+    ).order_by("id")
+    return {
+        "users": [
+            {
+                **user_json(u),
+                "date_joined": u.date_joined.isoformat(),
+                "last_login": u.last_login.isoformat() if u.last_login else None,
+                "trees": u.tree_count,
+                "active_keys": u.active_keys,
+            }
+            for u in rows
+        ]
+    }
+
+
+@api_view(methods=("GET",), admin_required=True)
+def admin_tokens(request, data):
+    rows = ApiToken.objects.select_related("user").filter(
+        revoked_at__isnull=True, expires_at__gt=timezone.now()
+    )
+    return {"tokens": [{**token_json(r, request.auth), "user": user_json(r.user)} for r in rows]}
+
+
+@api_view(methods=("DELETE",), admin_required=True)
+def admin_revoke_token(request, data, token_id: int):
+    try:
+        row = ApiToken.objects.get(pk=token_id)
+    except ApiToken.DoesNotExist:
+        raise NotFound("Key not found.")
+    revoke(row)
+    return {"revoked": token_id}
+
+
+@api_view(methods=("DELETE",), admin_required=True)
+def admin_revoke_user_tokens(request, data, user_id: int):
+    """Log a user out everywhere."""
+    if not User.objects.filter(pk=user_id).exists():
+        raise NotFound("User not found.")
+    if user_id == request.user.id:
+        raise BadRequest("To log yourself out everywhere, revoke your keys one by one.")
+    count = ApiToken.objects.filter(user_id=user_id, revoked_at__isnull=True).update(revoked_at=timezone.now())
+    return {"revoked": count}

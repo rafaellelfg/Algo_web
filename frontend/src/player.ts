@@ -31,6 +31,8 @@ export class StepPlayer<S extends BaseStep = BaseStep> {
     ui.prev.addEventListener("click", () => this.go(this.index - 1));
     ui.next.addEventListener("click", () => this.go(this.index + 1));
     ui.play.addEventListener("click", () => (this.timer ? this.pause() : this.play()));
+    // switching to another page stops the autoplay
+    document.addEventListener("route-change", () => this.pause());
   }
 
   get active(): boolean {

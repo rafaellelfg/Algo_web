@@ -144,7 +144,6 @@ function autoWeight(u: number, v: number): number {
 
 /** Put every node that was not dragged by hand on a circle */
 function layout(): void {
-  const free = state.data.nodes.filter((n) => !n.pinned);
   const n = state.data.nodes.length;
   const radius = Math.min(190, 60 + n * 18);
   state.data.nodes.forEach((nd, i) => {
@@ -153,7 +152,6 @@ function layout(): void {
     nd.x = n === 1 ? W / 2 : W / 2 + radius * 1.45 * Math.cos(a);
     nd.y = n === 1 ? H / 2 : H / 2 + radius * Math.sin(a);
   });
-  void free;
 }
 
 function exampleState(directed: boolean): TabState {
@@ -618,6 +616,7 @@ function renderSections(): void {
   for (const nd of state.data.nodes) {
     const card = h("article", "node-card");
     card.dataset.id = String(nd.id);
+    card.dataset.name = nd.name; // lets tests (and CSS) find a node's section by name
 
     // header: editable name + delete
     const head = h("div", "nc-head");
