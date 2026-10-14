@@ -8,12 +8,23 @@
   <body>
     <nav class="topbar">
       <div class="topbar-inner">
-        <div class="tabs">
-          <a href="#/" data-route="main">Trees</a>
-          <a href="#/graphs" data-route="graphs">Graphs</a>
-          <a href="#/practice" data-route="practice">Practice</a>
-          <a href="#/history" data-route="history">History</a>
-          <a href="#/admin" data-route="admin" id="admin-tab" hidden>Admin</a>
+        <div class="nav-left">
+          <a class="brand" href="#/" aria-label="Algorithm Visualizer — home">
+            <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+              <path d="M11 5 L5 16 M11 5 L17 16" stroke="currentColor" stroke-width="1.8" fill="none" />
+              <circle cx="11" cy="5" r="3.2" fill="currentColor" />
+              <circle cx="5" cy="16.5" r="3.2" fill="currentColor" />
+              <circle cx="17" cy="16.5" r="3.2" fill="currentColor" />
+            </svg>
+            <span class="brand-name">Algorithm Visualizer</span>
+          </a>
+          <div class="tabs">
+            <a href="#/" data-route="main">Trees</a>
+            <a href="#/graphs" data-route="graphs">Graphs</a>
+            <a href="#/practice" data-route="practice">Practice</a>
+            <a href="#/history" data-route="history">History</a>
+            <a href="#/admin" data-route="admin" id="admin-tab" hidden>Admin</a>
+          </div>
         </div>
         <div id="account" class="account">
           <!-- filled by auth.ts -->
