@@ -13,6 +13,9 @@ History (needs a Bearer key)
 Graphs
   POST   /api/graph/analyze/         is the graph cyclic?   {"directed", "nodes", "edges"}
   POST   /api/graph/run/             run an algorithm step by step  {..., "algorithm", "start"?, "goal"?}
+Practice
+  GET    /api/practice/              the data structures (trees, graphs) with their tasks
+  GET    /api/practice/<id>/         one task: story, task, rules, input and output
 Admin (needs an ADMIN Bearer key)
   GET    /api/admin/users/           all users          GET /api/admin/tokens/   all active keys
   DELETE /api/admin/tokens/<id>/     revoke a key       DELETE /api/admin/users/<id>/tokens/   log a user out everywhere
@@ -27,6 +30,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from algorithms import practice
 from algorithms.algorithms import ALGORITHMS, TREE_CLASSES, Graph, cycle_check, paint_steps, run
 from algorithms.build import fmt
 from algorithms.code import graph_code, tree_code
@@ -81,8 +85,7 @@ def _my_tree(request, tree_id: Any) -> Optional[SavedTree]:
 def create_tree(request, data):
     kind = _kind(data.get("kind"))
     if data.get("tree") is not None:
-        # save an existing tree exactly as it is (rebuilding a red-black tree from
-        # its numbers could give a different shape)
+
         tree = TREE_CLASSES[kind].from_dict(data["tree"])
         numbers, duplicates = tree._traverse("pre"), []
     else:
@@ -95,7 +98,6 @@ def create_tree(request, data):
         tree, duplicates = TREE_CLASSES[kind].build(numbers)
     result = {**tree.summary(), "duplicates": duplicates, "tree_id": None}
 
-    # "save": false lets the frontend build the demo tree without filling the history
     if request.user.is_authenticated and data.get("save", True) is not False:
         with transaction.atomic():
             saved = SavedTree.objects.create(
@@ -122,7 +124,6 @@ def _outcome(op: str, ok: bool, target: Optional[float], extra: Any = None) -> s
 
 def _run(request, data, op: str) -> dict:
     saved = _my_tree(request, data.get("tree_id"))
-    # For a saved tree the database copy is the source of truth
     kind = saved.kind if saved else _kind(data.get("kind"))
     if op not in OPS[kind]:
         names = {"bst": "binary search tree", "rb": "red-black tree"}
@@ -158,7 +159,7 @@ def _run(request, data, op: str) -> dict:
         "outcome": outcome,
         "steps": steps,
         "code": tree_code(kind, op),
-        **tree.summary(),  # the tree after the operation (kind becomes "rb" after painting)
+        **tree.summary(),
     }
 
     if saved:
@@ -169,7 +170,7 @@ def _run(request, data, op: str) -> dict:
             )
             if changed:
                 saved.root, saved.size, saved.kind = tree.snapshot(), tree.size, tree.kind
-            saved.save()  # bumps updated_at so the tree moves to the top of the history
+            saved.save()
     result["tree_id"] = saved.pk if saved else None
     return result
 
@@ -254,7 +255,6 @@ def history_operation(request, data, tree_id: int, op_id: int):
 # Graphs (stateless: the frontend sends the whole graph every time)
 # ======================================================================
 def _graph(data: dict) -> Graph:
-    # a bad graph raises GraphError → @api_view answers 400 with its message
     return Graph(data.get("directed", False), data.get("nodes", []), data.get("edges", []))
 
 
@@ -283,6 +283,22 @@ def run_algorithm(request, data):
         "code": graph_code(algorithm, g.directed),
         **result,
     }
+
+
+# ======================================================================
+# Practice tasks (their texts are in ../algorithms/practice.py)
+# ======================================================================
+@api_view(methods=("GET",))
+def practice_tasks(request, data):
+    return {"structures": practice.overview()}
+
+
+@api_view(methods=("GET",))
+def practice_task(request, data, task_id: str):
+    task = practice.task_detail(task_id)
+    if task is None:
+        raise NotFound(f"There is no practice task '{task_id}'.")
+    return {"task": task}
 
 
 # ======================================================================

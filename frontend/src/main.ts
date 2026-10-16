@@ -4,6 +4,7 @@ import { auth } from "./auth";
 import "./keys"; // the "API key" window
 import { showGraphs } from "./graph";
 import { showHistory } from "./history";
+import { showPractice } from "./practice";
 import { initVisualizer } from "./visualizer";
 
 const views = {
@@ -20,7 +21,12 @@ function currentRoute(): Route {
   return hash in views && hash !== "main" ? (hash as Route) : "main";
 }
 
-/** Tiny hash router: #/ = trees, #/graphs, #/practice, #/history, #/admin */
+/** The parts after the page name: ["trees", "squirrel"] for #/practice/trees/squirrel */
+function subRoute(): string[] {
+  return location.hash.replace(/^#\/?/, "").split("/").slice(1).filter(Boolean).map(decodeURIComponent);
+}
+
+/** Tiny hash router: #/ = trees, #/graphs, #/practice[/<structure>[/<task>]], #/history, #/admin */
 function route(): void {
   const r = currentRoute();
   document.dispatchEvent(new CustomEvent("route-change"));
@@ -30,6 +36,7 @@ function route(): void {
   });
   if (r === "history") void showHistory();
   if (r === "graphs") showGraphs();
+  if (r === "practice") void showPractice(subRoute());
   if (r === "admin") void showAdmin();
 }
 

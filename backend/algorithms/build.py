@@ -29,7 +29,7 @@ class Node:
     value: float
     left: Optional["Node"] = None
     right: Optional["Node"] = None
-    color: Optional[str] = None  # only used by red-black trees
+    color: Optional[str] = None  
     parent: Optional["Node"] = field(default=None, repr=False)
 
     def to_dict(self) -> dict:
@@ -45,7 +45,7 @@ class Node:
 
 
 def fmt(v: float) -> str:
-    """Pretty number for step messages: 5 instead of 5.0."""
+
     return str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)
 
 
@@ -63,14 +63,14 @@ class BinarySearchTree:
 
     # ------------------------------------------------------------------ build
     def insert(self, value: float) -> Optional[Node]:
-        """Insert a value (no steps). Returns the new node, or None for a duplicate."""
+        
         parent, side = self._find_slot(value)
         if side == "dup":
             return None
         return self._attach(value, parent, side)
 
     def _find_slot(self, value: float) -> tuple[Optional[Node], str]:
-        """Where would `value` go? -> (parent, "left"/"right"/"root"), or (node, "dup")."""
+        
         current, parent, side = self.root, None, "root"
         while current is not None:
             if value == current.value:
@@ -94,7 +94,7 @@ class BinarySearchTree:
 
     @classmethod
     def build(cls, values: list[float]) -> tuple["BinarySearchTree", list[float]]:
-        """Build a tree from a list. Returns the tree and the skipped duplicates."""
+        
         tree = cls()
         duplicates: list[float] = []
         for v in values:
@@ -104,7 +104,7 @@ class BinarySearchTree:
 
     @classmethod
     def from_dict(cls, data: Any) -> "BinarySearchTree":
-        """Rebuild a tree from the JSON the frontend sends back."""
+        
         tree = cls()
         seen_ids: set[int] = set()
 
@@ -138,9 +138,8 @@ class BinarySearchTree:
         return tree
 
     def _after_load(self) -> None:
-        """Hook for subclasses to validate a loaded tree."""
         for node in self._nodes():
-            node.color = None  # a plain BST has no colors
+            node.color = None
 
     def _nodes(self) -> list[Node]:
         out: list[Node] = []
@@ -151,7 +150,7 @@ class BinarySearchTree:
             stack.extend(c for c in (n.right, n.left) if c)
         return out
 
-    # ------------------------------------------------------------ properties
+    
     def height(self) -> int:
         def _h(node: Optional[Node]) -> int:
             return 0 if node is None else 1 + max(_h(node.left), _h(node.right))
@@ -318,7 +317,7 @@ class RedBlackTree(BinarySearchTree):
 # Graph
 # ======================================================================
 INF = math.inf
-H_SCALE = 50  # screen pixels per 1 unit of distance for the A* / greedy heuristic
+H_SCALE = 50
 
 
 class GraphError(ValueError):
@@ -382,7 +381,7 @@ class Graph:
         for i in self.ids:  # deterministic order: neighbours by name
             self.adj[i].sort(key=lambda t: self.names[t[0]].lower())
 
-    # ---------------------------------------------------------------- helpers
+
     def n(self, i: int) -> str:
         return self.names[i]
 

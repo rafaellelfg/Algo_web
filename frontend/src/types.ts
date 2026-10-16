@@ -241,3 +241,35 @@ export interface GraphAnalysis {
   cycle_text: string;
   negative_edges: boolean;
 }
+
+// =====================================================================
+// Practice tasks
+// =====================================================================
+/** One task in a list */
+export interface PracticeTaskSummary {
+  id: string;
+  /** the data structure it belongs to: "trees" / "graphs" */
+  structure: string;
+  title: string;
+  topic: string;
+  difficulty: string;
+  teaser: string;
+}
+
+/** A data structure you can practise on, with its tasks (GET /api/practice/) */
+export interface PracticeStructure {
+  id: string;
+  title: string;
+  text: string;
+  tasks: PracticeTaskSummary[];
+}
+
+/** The whole task (GET /api/practice/<id>/). Text may contain `code` in backticks. */
+export interface PracticeTask extends PracticeTaskSummary {
+  story: string[];
+  task: string[];
+  task_steps: string[];
+  rules: string[];
+  input: string[];
+  output: string[];
+}

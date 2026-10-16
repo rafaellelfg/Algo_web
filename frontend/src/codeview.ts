@@ -1,10 +1,3 @@
-/**
- * Python code panel shown on the right of a visualization.
- *
- * The backend sends plain Python where some lines end with a marker like
- * `#@pop` or `#@case1,case2`. Every algorithm step carries a `code` tag, and
- * the panel highlights the line(s) with that tag. The markers are not shown.
- */
 
 const KEYWORDS = new Set([
   "def", "return", "if", "elif", "else", "while", "for", "in", "not", "and", "or", "is",
@@ -16,7 +9,6 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Very small Python highlighter: comments, strings, numbers, keywords, function names */
 function highlightPython(line: string): string {
   const out: string[] = [];
   const re = /(#.*$)|("[^"]*"|'[^']*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)|(\s+)|(.)/g;
@@ -59,7 +51,6 @@ export class CodePanel {
     this.lines = [];
   }
 
-  /** Show a new code snippet */
   set(code: string, title: string): void {
     if (!code) {
       this.clear();
@@ -89,7 +80,6 @@ export class CodePanel {
     this.body.append(ol);
   }
 
-  /** Highlight the line(s) of the step's code tag */
   highlight(tag: string | null | undefined): void {
     this.lines.forEach((li) => li.classList.remove("hl"));
     if (!tag) return;
@@ -97,9 +87,8 @@ export class CodePanel {
     idx.forEach((i) => this.lines[i]?.classList.add("hl"));
     const first = this.lines[idx[0]];
     if (first) {
-      // scroll inside the code box only (never the page)
       const box = this.body;
-      const top = first.offsetTop; // .code-body is position: relative
+      const top = first.offsetTop; 
       if (top < box.scrollTop + 8 || top > box.scrollTop + box.clientHeight - 40) {
         box.scrollTop = Math.max(0, top - box.clientHeight / 3);
       }

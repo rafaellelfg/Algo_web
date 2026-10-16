@@ -5,7 +5,7 @@ How it works
         → a USER Bearer key, valid 12 hours
   * Admin login has two steps:
         POST /api/auth/admin/login/   username + password of a staff user → a one-time challenge
-        POST /api/auth/admin/verify/  the challenge + the admin phrase ("IB002") → an ADMIN key, valid 30 minutes
+        POST /api/auth/admin/verify/  the challenge + the admin phrase (from .env) → an ADMIN key, valid 30 minutes
   * Every request then sends   Authorization: Bearer <key>
   * Keys are "dynamic": each login makes a new random key, keys expire, and the
     frontend swaps its key for a fresh one (/api/auth/token/refresh/) before it runs out.
@@ -21,6 +21,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import timedelta
+from functools import lru_cache
 from typing import Optional
 
 from django.conf import settings
@@ -41,8 +42,8 @@ from .models import AdminChallenge, ApiToken
 # * API keys are long random strings (256 bits), so a fast keyed hash is enough:
 #   HMAC-SHA256 with a server-side key ("pepper"). The database stores only this
 #   hash — a leaked database does not leak usable keys.
-# * The admin phrase is short and human-chosen ("IB002"), so it gets a slow,
-#   salted hash: PBKDF2-HMAC-SHA256 with 310 000 iterations. Only the hash is kept.
+# * The admin phrase is short and human-chosen, so it gets a slow, salted hash:
+#   PBKDF2-HMAC-SHA256 with 310 000 iterations. Answers are checked against the hash.
 # * Comparisons use hmac.compare_digest (constant time).
 # ======================================================================
 PBKDF2_ALGORITHM = "pbkdf2_sha256"
@@ -84,8 +85,23 @@ def verify_phrase(phrase: str, encoded: str) -> bool:
     return hmac.compare_digest(candidate.encode(), encoded.encode())
 
 
+@lru_cache(maxsize=4)
+def _hash_once(phrase: str) -> str:
+    return hash_phrase(phrase)
+
+
+def admin_phrase_hash() -> str:
+    """The hash an answer is checked against: ADMIN_PHRASE_HASH from .env, or else
+    the hash of ADMIN_SECRET_PHRASE (made once, when first needed). '' = no phrase set."""
+    if settings.ADMIN_PHRASE_HASH:
+        return settings.ADMIN_PHRASE_HASH
+    phrase = settings.ADMIN_SECRET_PHRASE.strip()
+    return _hash_once(phrase) if phrase else ""
+
+
 def verify_admin_phrase(answer: str) -> bool:
-    return verify_phrase(answer.strip(), settings.ADMIN_PHRASE_HASH)
+    encoded = admin_phrase_hash()
+    return bool(encoded) and verify_phrase(answer.strip(), encoded)
 
 
 # ======================================================================

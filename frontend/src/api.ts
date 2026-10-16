@@ -16,6 +16,8 @@ import type {
   AdminChallenge,
   ApiKeyInfo,
   AdminUser,
+  PracticeStructure,
+  PracticeTask,
   Role,
 } from "./types";
 import { getSession, setSession } from "./session";
@@ -147,3 +149,11 @@ export const analyzeGraph = (g: GraphData) => post<GraphAnalysis>("/api/graph/an
 /** Run a graph algorithm step by step */
 export const runGraphAlgorithm = (g: GraphData, algorithm: GraphAlgorithm, start: number | null, goal: number | null) =>
   post<GraphRunResponse>("/api/graph/run/", { ...graphBody(g), algorithm, start, goal });
+
+// ---- practice ----
+/** The data structures you can practise on, each with its list of tasks */
+export const fetchPractice = () =>
+  get<{ structures: PracticeStructure[] }>("/api/practice/").then((r) => r.structures);
+/** One task: story, task, rules, input and output */
+export const fetchPracticeTask = (id: string) =>
+  get<{ task: PracticeTask }>(`/api/practice/${encodeURIComponent(id)}/`).then((r) => r.task);

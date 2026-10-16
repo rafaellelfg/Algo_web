@@ -10,7 +10,12 @@ from django.utils import timezone
 from api.login import hash_phrase, hash_token, new_token, verify_admin_phrase, verify_phrase
 from api.models import ApiToken
 
+# The tests use their own phrase, not the real one from .env
+TEST_PHRASE = "test-phrase-42"
+test_phrase = override_settings(ADMIN_SECRET_PHRASE=TEST_PHRASE, ADMIN_PHRASE_HASH="")
 
+
+@test_phrase
 class HashingTests(TestCase):
     def test_token_hash(self):
         t = new_token("user")
@@ -29,12 +34,23 @@ class HashingTests(TestCase):
         self.assertFalse(verify_phrase("Secret", h))
         self.assertFalse(verify_phrase("secret", "garbage"))
 
-    def test_default_admin_phrase_is_ib002(self):
-        self.assertTrue(verify_admin_phrase("IB002"))
-        self.assertTrue(verify_admin_phrase("  IB002 "))
-        self.assertFalse(verify_admin_phrase("IB003"))
+    def test_admin_phrase_comes_from_settings(self):
+        self.assertTrue(verify_admin_phrase(TEST_PHRASE))
+        self.assertTrue(verify_admin_phrase(f"  {TEST_PHRASE} "))
+        self.assertFalse(verify_admin_phrase(TEST_PHRASE + "x"))
+
+    def test_admin_phrase_hash_wins(self):
+        with self.settings(ADMIN_PHRASE_HASH=hash_phrase("only-the-hash")):
+            self.assertTrue(verify_admin_phrase("only-the-hash"))
+            self.assertFalse(verify_admin_phrase(TEST_PHRASE))
+
+    def test_no_phrase_set_means_no_admin_login(self):
+        with self.settings(ADMIN_SECRET_PHRASE="", ADMIN_PHRASE_HASH=""):
+            self.assertFalse(verify_admin_phrase(""))
+            self.assertFalse(verify_admin_phrase(TEST_PHRASE))
 
 
+@test_phrase
 class Api(TestCase):
     def setUp(self):
         cache.clear()
@@ -57,7 +73,7 @@ class Api(TestCase):
 
     def admin_key(self, username="boss", password="b0ss-pass!"):
         ch = self.call("post", "/api/auth/admin/login/", {"username": username, "password": password}).json()
-        r = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": "IB002"})
+        r = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": TEST_PHRASE})
         self.assertEqual(r.status_code, 200, r.content)
         return r.json()["token"]
 
@@ -155,13 +171,13 @@ class AdminLoginTests(Api):
         ch = r.json()
         self.assertIn("admin phrase", ch["question"])
         self.assertEqual(ch["attempts_left"], 3)
-        ok = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": "IB002"}).json()
+        ok = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": TEST_PHRASE}).json()
         self.assertEqual(ok["role"], "admin")
         self.assertTrue(ok["token"].startswith("algo_a_"))
         self.assertEqual(ok["expires_in"], 30 * 60)
         self.assertTrue(ok["user"]["is_admin"])
         # the challenge is single-use
-        again = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": "IB002"})
+        again = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": TEST_PHRASE})
         self.assertEqual(again.status_code, 401)
 
     def test_wrong_phrase_attempts(self):
@@ -174,7 +190,7 @@ class AdminLoginTests(Api):
         r3 = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": "y"})
         self.assertIn("No attempts left", r3.json()["error"])
         # even the right phrase no longer works on this challenge
-        r4 = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": "IB002"})
+        r4 = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": TEST_PHRASE})
         self.assertEqual(r4.status_code, 401)
 
     def test_expired_challenge(self):
@@ -182,7 +198,7 @@ class AdminLoginTests(Api):
         self.make_admin()
         ch = self.call("post", "/api/auth/admin/login/", {"username": "boss", "password": "b0ss-pass!"}).json()
         AdminChallenge.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
-        r = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": "IB002"})
+        r = self.call("post", "/api/auth/admin/verify/", {"challenge_id": ch["challenge_id"], "answer": TEST_PHRASE})
         self.assertEqual(r.status_code, 401)
 
     def test_non_admin_cannot_start(self):

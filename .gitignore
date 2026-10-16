@@ -6,3 +6,6 @@ __pycache__/
 *.sqlite3
 test-results/
 playwright-report/
+
+# secrets: admin login, password, admin phrase, server keys (created by run.py)
+.env

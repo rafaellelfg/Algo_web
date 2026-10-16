@@ -25,6 +25,9 @@ urlpatterns = [
     # ---- graphs (api.py)
     path("graph/analyze/", api.analyze),
     path("graph/run/", api.run_algorithm),
+    # ---- practice tasks (api.py)
+    path("practice/", api.practice_tasks),
+    path("practice/<slug:task_id>/", api.practice_task),
     # ---- admin (api.py)
     path("admin/users/", api.admin_users),
     path("admin/users/<int:user_id>/tokens/", api.admin_revoke_user_tokens),

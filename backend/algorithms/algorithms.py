@@ -1,15 +1,4 @@
-"""DO the algorithms — every one returns a list of steps for the frontend.
 
-Trees (methods on BSTAlgorithms / RedBlackAlgorithms):
-    search_steps, insert_steps, delete_steps        BST and red-black
-    black_depth_steps                               red-black: check every root-to-NIL path
-    paint_steps(tree)                               try to color a BST as a red-black tree
-Graphs (functions taking a Graph):
-    cycle_check, bfs, dfs, dijkstra, greedy, a_star, bellman_ford, topo_sort   → run()
-
-A step is {"message", "status", "code" (the Python line to highlight, see code.py),
-"highlight" (what to color), "ds" (queue / stack / priority queue / table), "tree"?}.
-"""
 from __future__ import annotations
 
 import heapq
@@ -43,11 +32,7 @@ class BSTAlgorithms(BinarySearchTree):
     """A binary search tree plus its step-by-step search / insert / delete."""
 
     def _step(self, message: str, status: str = "info", code: Optional[str] = None, **highlight: Any) -> dict:
-        """
-        One step of an algorithm: explanation + tree state + what to highlight.
-        `code` is a tag that tells the frontend which line of the Python code
-        (see code.py) is running in this step.
-        """
+       
         ds = highlight.pop("ds", None)  # optional helper data structure (stack / queue)
         step = {
             "message": message,
@@ -61,11 +46,7 @@ class BSTAlgorithms(BinarySearchTree):
         return step
 
     def _walk(self, target: float, steps: list[dict], purpose: str) -> tuple[Optional[Node], Optional[Node], str]:
-        """
-        Shared walk from the root towards `target`, recording compare steps.
-        Returns (node, parent, side): node is the match (or None), and for a
-        miss `parent`/`side` tell where the value would be attached.
-        """
+        
         if self.root is None:
             return None, None, "root"
 
@@ -126,7 +107,7 @@ class BSTAlgorithms(BinarySearchTree):
         return None, None, "root"  # unreachable
 
     def _search_walk(self, target: float, steps: list[dict]) -> tuple[Optional[Node], Optional[Node]]:
-        """Search walk; on a miss adds the final NOT FOUND step."""
+        
         if self.root is None:
             steps.append(self._step("The tree is empty — there is nothing to search.", status="not_found", code="notfound"))
             return None, None
@@ -150,7 +131,7 @@ class BSTAlgorithms(BinarySearchTree):
         return node is not None, steps
 
     def _insert_walk(self, target: float, steps: list[dict]) -> Optional[Node]:
-        """Walk to the empty spot and attach a new node there (with steps)."""
+        
         t = fmt(target)
         if self.root is None:
             steps.append(self._step(f"The tree is empty → {t} becomes the root.", code="empty"))
@@ -180,7 +161,7 @@ class BSTAlgorithms(BinarySearchTree):
         return new is not None, steps
 
     def _successor_steps(self, node: Node, steps: list[dict], **extra: Any) -> Node:
-        """Walk to the smallest node of the right subtree, recording steps."""
+        
         v = fmt(node.value)
         succ = node.right
         path = [succ.id]
@@ -456,7 +437,7 @@ class RedBlackAlgorithms(BSTAlgorithms, RedBlackTree):
         x_side = None if x_parent is None else ("left" if x_parent.left is y else "right")
         child_txt = f"one child ({fmt(x.value)})" if x else "no children"
 
-        # Removing a red node never changes a black depth
+        
         if y.color == RED:
             steps.append(
                 self._step(
@@ -470,7 +451,7 @@ class RedBlackAlgorithms(BSTAlgorithms, RedBlackTree):
             steps.append(self._step(f"{v} deleted. No fix-up needed.", status="done", code="done", changed=x.id if x else None))
             return True, steps
 
-        # Removing the root
+        
         if x_parent is None:
             steps.append(
                 self._step(
@@ -487,7 +468,7 @@ class RedBlackAlgorithms(BSTAlgorithms, RedBlackTree):
             steps.append(self._step(f"{v} deleted.", status="done", code="done", changed=x.id if x else None))
             return True, steps
 
-        # Black node with a red child: the child takes over the black
+        
         if is_red(x):
             steps.append(
                 self._step(
@@ -503,7 +484,7 @@ class RedBlackAlgorithms(BSTAlgorithms, RedBlackTree):
             steps.append(self._step(f"{v} deleted. No further fix-up needed.", status="done", code="done", changed=x.id))
             return True, steps
 
-        # Black node with no red child: a "double black" appears
+        
         steps.append(
             self._step(
                 f"The node to remove ({yv}) is black and has {child_txt} → after removing it, every path through "
@@ -649,7 +630,7 @@ class RedBlackAlgorithms(BSTAlgorithms, RedBlackTree):
         )
 
         def call_stack(frames: list[str]) -> dict:
-            # the recursion stack of visit(): shown with the current call (top) first
+            
             return {"type": "stack", "title": "Call stack of visit() (top first)", "items": [{"label": f} for f in reversed(frames)]}
 
         def visit(n: Node, above: int, path: list[int], frames: list[str]) -> None:

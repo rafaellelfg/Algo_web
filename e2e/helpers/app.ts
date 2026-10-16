@@ -1,12 +1,39 @@
 /** Shared helpers for the end-to-end tests. */
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ROOT = path.resolve(__dirname, "..", "..");
 export const BACKEND = path.join(ROOT, "backend");
 export const PASSWORD = "e2e-pass-123";
-export const ADMIN = { username: "e2e_admin", password: "e2e-Admin-pass-1", name: "E2E Admin", phrase: "IB002" };
+/** The tests' own admin account. Its password is new and random on every run. */
+export const ADMIN = { username: "e2e_admin", password: `e2e-${randomBytes(12).toString("hex")}`, name: "E2E Admin" };
+
+/** A value from the project's .env file (the secrets; created by `python run.py`) */
+function fromEnvFile(name: string): string | undefined {
+  if (process.env[name]) return process.env[name];
+  const file = path.join(ROOT, ".env");
+  if (!existsSync(file)) return undefined;
+  for (const raw of readFileSync(file, "utf8").replace(/^﻿/, "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) continue;
+    const at = line.indexOf("=");
+    if (line.slice(0, at).trim() !== name) continue;
+    let value = line.slice(at + 1).trim();
+    if (value.length >= 2 && value[0] === value[value.length - 1] && `"'`.includes(value[0])) value = value.slice(1, -1);
+    return value;
+  }
+  return undefined;
+}
+
+/** The admin phrase the server expects (ADMIN_SECRET_PHRASE in .env) */
+export function adminPhrase(): string {
+  const phrase = fromEnvFile("ADMIN_SECRET_PHRASE");
+  if (!phrase) throw new Error("ADMIN_SECRET_PHRASE is not in the .env file - start the project once with `python run.py`.");
+  return phrase;
+}
 
 // ------------------------------------------------------------------ accounts
 /** A fresh, valid username (3–30 letters/digits) */
@@ -77,7 +104,7 @@ export async function answerPhrase(page: Page, phrase: string): Promise<void> {
 /** Full admin login: password + the admin phrase */
 export async function adminLogIn(page: Page): Promise<void> {
   await adminStepOne(page);
-  await answerPhrase(page, ADMIN.phrase);
+  await answerPhrase(page, adminPhrase());
   await dialogClosed(page);
   await expect(page.locator("#account .role-tag.admin")).toHaveText("ADMIN");
 }

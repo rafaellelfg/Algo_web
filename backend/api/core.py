@@ -67,11 +67,7 @@ def _error(status: int, message: str, code: str) -> JsonResponse:
 
 
 def api_view(methods=("POST",), login_required=False, admin_required=False):
-    """
-    Decorator for JSON endpoints. The view receives (request, data, **kwargs)
-    and returns a dict. `request.user` comes from the Bearer key (or is anonymous),
-    `request.auth` is the ApiToken row (or None).
-    """
+   
 
     def decorator(func):
         @csrf_exempt
@@ -90,7 +86,6 @@ def api_view(methods=("POST",), login_required=False, admin_required=False):
                     request.auth = check_token(key)
                     request.user = request.auth.user
             except TokenError as e:
-                # a key was sent but it is not valid → tell the client to log in again
                 return _error(401, str(e), "token_invalid")
 
             try:

@@ -1,11 +1,12 @@
 /**
  * Login system: sign up, log in, Bearer keys (dynamic, rotated, revoked),
- * the two-step admin login with the admin phrase "IB002", and admin-only pages.
+ * the two-step admin login with the admin phrase (read from the .env file), and admin-only pages.
  */
 import { expect, test } from "@playwright/test";
 import {
   ADMIN,
   adminLogIn,
+  adminPhrase,
   adminStepOne,
   answerPhrase,
   buildTree,
@@ -137,16 +138,16 @@ test.describe("users", () => {
 test.describe("admin", () => {
   test.beforeAll(() => ensureAdmin());
 
-  test("admin login = password, then the admin phrase IB002", async ({ page }) => {
+  test("admin login = password, then the admin phrase", async ({ page }) => {
     await openApp(page);
     await adminStepOne(page);
     await expect(page.locator("#auth-question")).toContainText("admin phrase");
     await expect(page.locator("#auth-cred-rows")).toBeHidden();
 
-    await answerPhrase(page, "IB001");
+    await answerPhrase(page, "wrong-phrase");
     await expect(page.locator("#auth-error")).toContainText("2 attempts left");
 
-    await answerPhrase(page, ADMIN.phrase);
+    await answerPhrase(page, adminPhrase());
     await dialogClosed(page);
     await expect(page.locator("#account .role-tag.admin")).toHaveText("ADMIN");
 
